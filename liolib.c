@@ -22,6 +22,21 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+#if defined(LUA_USE_BAREMETAL_FS)
+#include "../../baremetal_files.h"
+#define FILE WMFSFile
+#define fopen wmfs_fopen
+#define fclose wmfs_fclose
+#define fflush wmfs_fflush
+#define fread wmfs_fread
+#define fwrite wmfs_fwrite
+#define clearerr wmfs_clearerr
+#define feof wmfs_feof
+#define ferror wmfs_ferror
+#define getc wmfs_getc
+#define ungetc wmfs_ungetc
+#endif
+
 
 
 
@@ -54,7 +69,15 @@ static int l_checkmode (const char *mode) {
 
 #if !defined(l_popen)		/* { */
 
-#if defined(LUA_USE_POSIX)	/* { */
+#if defined(LUA_USE_BAREMETAL_FS)
+
+#define l_popen(L,c,m)  \
+	  ((void)c, (void)m, \
+	  luaL_error(L, "'popen' not supported"), \
+	  (FILE*)0)
+#define l_pclose(L,file)		((void)L, (void)file, -1)
+
+#elif defined(LUA_USE_POSIX)	/* { */
 
 #define l_popen(L,c,m)		(fflush(NULL), popen(c,m))
 #define l_pclose(L,file)	(pclose(file))
@@ -94,7 +117,11 @@ static int l_checkmode (const char *mode) {
 
 #if !defined(l_getc)		/* { */
 
-#if defined(LUA_USE_POSIX)
+#if defined(LUA_USE_BAREMETAL_FS)
+#define l_getc(f)		wmfs_getc(f)
+#define l_lockfile(f)		((void)0)
+#define l_unlockfile(f)		((void)0)
+#elif defined(LUA_USE_POSIX)
 #define l_getc(f)		getc_unlocked(f)
 #define l_lockfile(f)		flockfile(f)
 #define l_unlockfile(f)		funlockfile(f)
@@ -115,7 +142,13 @@ static int l_checkmode (const char *mode) {
 
 #if !defined(l_fseek)		/* { */
 
-#if defined(LUA_USE_POSIX)	/* { */
+#if defined(LUA_USE_BAREMETAL_FS)
+
+#define l_seeknum		long
+#define l_fseek(f,o,w)		wmfs_fseek(f,o,w)
+#define l_ftell(f)		wmfs_ftell(f)
+
+#elif defined(LUA_USE_POSIX)	/* { */
 
 #include <sys/types.h>
 
@@ -303,7 +336,16 @@ static int io_popen (lua_State *L) {
 static int io_tmpfile (lua_State *L) {
   LStream *p = newfile(L);
   errno = 0;
+#if defined(LUA_USE_BAREMETAL_FS)
+  {
+    static unsigned long tmpfile_id = 0;
+    char name[64];
+    snprintf(name, sizeof(name), "__wmfs_tmp_%lu", tmpfile_id++);
+    p->f = wmfs_fopen(name, "w+");
+  }
+#else
   p->f = tmpfile();
+#endif
   return (p->f == NULL) ? luaL_fileresult(L, 0, NULL) : 1;
 }
 
@@ -668,12 +710,23 @@ static int g_write (lua_State *L, FILE *f, int arg) {
   for (; nargs--; arg++) {
     if (lua_type(L, arg) == LUA_TNUMBER) {
       /* optimization: could be done exactly as for strings */
+#if defined(LUA_USE_BAREMETAL_FS)
+      char buffer[128];
+      int len = lua_isinteger(L, arg)
+                ? snprintf(buffer, sizeof(buffer), LUA_INTEGER_FMT,
+                             (LUAI_UACINT)lua_tointeger(L, arg))
+                : snprintf(buffer, sizeof(buffer), LUA_NUMBER_FMT,
+                             (LUAI_UACNUMBER)lua_tonumber(L, arg));
+      status = status && (len > 0) &&
+               (wmfs_fwrite(buffer, sizeof(char), (size_t)len, f) == (size_t)len);
+#else
       int len = lua_isinteger(L, arg)
                 ? fprintf(f, LUA_INTEGER_FMT,
                              (LUAI_UACINT)lua_tointeger(L, arg))
                 : fprintf(f, LUA_NUMBER_FMT,
                              (LUAI_UACNUMBER)lua_tonumber(L, arg));
       status = status && (len > 0);
+#endif
     }
     else {
       size_t l;
@@ -721,6 +774,11 @@ static int f_seek (lua_State *L) {
 
 
 static int f_setvbuf (lua_State *L) {
+#if defined(LUA_USE_BAREMETAL_FS)
+  tofile(L);
+  lua_pushboolean(L, 1);
+  return 1;
+#else
   static const int mode[] = {_IONBF, _IOFBF, _IOLBF};
   static const char *const modenames[] = {"no", "full", "line", NULL};
   FILE *f = tofile(L);
@@ -730,6 +788,7 @@ static int f_setvbuf (lua_State *L) {
   errno = 0;
   res = setvbuf(f, NULL, mode[op], (size_t)sz);
   return luaL_fileresult(L, res == 0, NULL);
+#endif
 }
 
 
@@ -833,9 +892,15 @@ LUAMOD_API int luaopen_io (lua_State *L) {
   luaL_newlib(L, iolib);  /* new module */
   createmeta(L);
   /* create (and set) default files */
+#if defined(LUA_USE_BAREMETAL_FS)
+  createstdfile(L, wmfs_fopen("__wmfs_stdin", "a+"), IO_INPUT, "stdin");
+  createstdfile(L, wmfs_fopen("__wmfs_stdout", "a+"), IO_OUTPUT, "stdout");
+  createstdfile(L, wmfs_fopen("__wmfs_stderr", "a+"), NULL, "stderr");
+#else
   createstdfile(L, stdin, IO_INPUT, "stdin");
   createstdfile(L, stdout, IO_OUTPUT, "stdout");
   createstdfile(L, stderr, NULL, "stderr");
+#endif
   return 1;
 }
 

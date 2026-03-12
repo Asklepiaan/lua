@@ -239,11 +239,19 @@ LUALIB_API char *(luaL_buffinitsize) (lua_State *L, luaL_Buffer *B, size_t sz);
 ** after that initial structure).
 */
 
+#if defined(LUA_USE_BAREMETAL_FS)
+#include "../../baremetal_files.h"
+#endif
+
 #define LUA_FILEHANDLE          "FILE*"
 
 
 typedef struct luaL_Stream {
+#if defined(LUA_USE_BAREMETAL_FS)
+  WMFSFile *f;
+#else
   FILE *f;  /* stream (NULL for incompletely created streams) */
+#endif
   lua_CFunction closef;  /* to close stream (NULL for closed streams) */
 } luaL_Stream;
 
@@ -257,18 +265,30 @@ typedef struct luaL_Stream {
 
 /* print a string */
 #if !defined(lua_writestring)
+#if defined(LUA_USE_BAREMETAL_FS)
+#define lua_writestring(s,l)   ((void)(s), (void)(l))
+#else
 #define lua_writestring(s,l)   fwrite((s), sizeof(char), (l), stdout)
+#endif
 #endif
 
 /* print a newline and flush the output */
 #if !defined(lua_writeline)
+#if defined(LUA_USE_BAREMETAL_FS)
+#define lua_writeline()        ((void)0)
+#else
 #define lua_writeline()        (lua_writestring("\n", 1), fflush(stdout))
+#endif
 #endif
 
 /* print an error message */
 #if !defined(lua_writestringerror)
+#if defined(LUA_USE_BAREMETAL_FS)
+#define lua_writestringerror(s,p) ((void)(s), (void)(p))
+#else
 #define lua_writestringerror(s,p) \
         (fprintf(stderr, (s), (p)), fflush(stderr))
+#endif
 #endif
 
 /* }================================================================== */

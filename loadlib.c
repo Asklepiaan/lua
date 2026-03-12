@@ -23,6 +23,13 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+#if defined(LUA_USE_BAREMETAL_FS)
+#include "../../baremetal_files.h"
+#define FILE WMFSFile
+#define fopen wmfs_fopen
+#define fclose wmfs_fclose
+#endif
+
 
 /*
 ** LUA_CSUBSEP is the character that replaces dots in submodule names
@@ -92,7 +99,26 @@ static lua_CFunction lsys_sym (lua_State *L, void *lib, const char *sym);
 
 
 
-#if defined(LUA_USE_DLOPEN)	/* { */
+#if defined(LUA_USE_BAREMETAL_FS)
+
+static void lsys_unloadlib (void *lib) {
+  (void)lib;
+}
+
+static void *lsys_load (lua_State *L, const char *path, int seeglb) {
+  (void)path;
+  (void)seeglb;
+  lua_pushliteral(L, "dynamic libraries are not available on bare metal");
+  return NULL;
+}
+
+static lua_CFunction lsys_sym (lua_State *L, void *lib, const char *sym) {
+  (void)lib;
+  lua_pushfstring(L, "symbol '%s' unavailable on bare metal", sym);
+  return NULL;
+}
+
+#elif defined(LUA_USE_DLOPEN)	/* { */
 /*
 ** {========================================================================
 ** This is an implementation of loadlib based on the dlfcn interface.

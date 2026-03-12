@@ -21,6 +21,12 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+#if defined(LUA_USE_BAREMETAL_FS)
+#include "../../baremetal_files.h"
+#define remove wmfs_remove
+#define rename wmfs_rename
+#endif
+
 
 /*
 ** {==================================================================

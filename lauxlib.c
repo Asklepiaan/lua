@@ -26,6 +26,18 @@
 
 #include "lauxlib.h"
 
+#if defined(LUA_USE_BAREMETAL_FS)
+#include "../../baremetal_files.h"
+#define FILE WMFSFile
+#define fopen wmfs_fopen
+#define freopen wmfs_freopen
+#define fclose wmfs_fclose
+#define fread wmfs_fread
+#define feof wmfs_feof
+#define getc wmfs_getc
+#define ferror wmfs_ferror
+#endif
+
 
 #if !defined(MAX_SIZET)
 /* maximum value for size_t */
@@ -789,7 +801,11 @@ LUALIB_API int luaL_loadfilex (lua_State *L, const char *filename,
   int fnameindex = lua_gettop(L) + 1;  /* index of filename on the stack */
   if (filename == NULL) {
     lua_pushliteral(L, "=stdin");
+#if defined(LUA_USE_BAREMETAL_FS)
+    lf.f = wmfs_fopen("__wmfs_stdin", "a+");
+#else
     lf.f = stdin;
+#endif
   }
   else {
     lua_pushfstring(L, "@%s", filename);
