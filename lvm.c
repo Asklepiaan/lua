@@ -384,7 +384,11 @@ static int l_strcmp (const TString *ts1, const TString *ts2) {
   const char *s2 = getstr(ts2);
   size_t rl2 = tsslen(ts2);
   for (;;) {  /* for each segment */
+#if defined(LUA_BAREMETAL_PROBE_MINIMAL)
+    int temp = strcmp(s1, s2);
+#else
     int temp = strcoll(s1, s2);
+#endif
     if (temp != 0)  /* not equal? */
       return temp;  /* done */
     else {  /* strings are equal up to a '\0' */

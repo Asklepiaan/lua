@@ -69,6 +69,10 @@ typedef struct LG {
     memcpy(b + p, &t, sizeof(t)); p += sizeof(t); }
 
 static unsigned int luai_makeseed (lua_State *L) {
+#if defined(LUA_BAREMETAL_PROBE_MINIMAL)
+  UNUSED(L);
+  return cast_uint(0x574d4236u);  /* stable seed for the bare-metal probe */
+#else
   char buff[3 * sizeof(size_t)];
   unsigned int h = cast_uint(time(NULL));
   int p = 0;
@@ -77,6 +81,7 @@ static unsigned int luai_makeseed (lua_State *L) {
   addbuff(buff, p, &lua_newstate);  /* public function */
   lua_assert(p == sizeof(buff));
   return luaS_hash(buff, p, h);
+#endif
 }
 
 #endif
