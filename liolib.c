@@ -903,4 +903,3 @@ LUAMOD_API int luaopen_io (lua_State *L) {
 #endif
   return 1;
 }
-

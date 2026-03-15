@@ -302,8 +302,7 @@ static int collectargs (char **argv, int *first) {
       case '-':  /* '--' */
         if (argv[i][2] != '\0')  /* extra characters after '--'? */
           return has_error;  /* invalid option */
-        /* if there is a script name, it comes after '--' */
-        *first = (argv[i + 1] != NULL) ? i + 1 : 0;
+        *first = i + 1;
         return args;
       case '\0':  /* '-' */
         return args;  /* script "name" is '-' */
